@@ -1,0 +1,60 @@
+name: Monthly Correlation Report
+
+on:
+  schedule:
+    # 07:00 UTC on the 1st of each month.
+    - cron: "0 7 1 * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: advisor-db
+  cancel-in-progress: false
+
+jobs:
+  run-monthly:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run monthly correlation report
+        env:
+          PYTHONPATH: src
+          LOCATION_LATITUDE: ${{ secrets.LOCATION_LATITUDE }}
+          LOCATION_LONGITUDE: ${{ secrets.LOCATION_LONGITUDE }}
+          LOCATION_TIMEZONE: ${{ secrets.LOCATION_TIMEZONE }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+        run: python -m advisor.cli run-monthly
+
+      - name: Commit updated database
+        if: always()
+        run: |
+          git config user.name "advisor-bot"
+          git config user.email "advisor-bot@users.noreply.github.com"
+          if [ -n "$(git status --porcelain data/)" ]; then
+            git add data/
+            git commit -m "chore: update advisor data (monthly) [skip ci]"
+            for i in 1 2 3 4; do
+              git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && break
+              echo "Push attempt $i failed, retrying in $((i*5))s..."
+              sleep $((i*5))
+            done
+          else
+            echo "No database changes to commit."
+          fi
