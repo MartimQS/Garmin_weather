@@ -108,7 +108,7 @@ def load_config(*, require_email: bool = True, require_garmin: bool = True) -> A
     )
 
     email = EmailConfig(
-        smtp_host=_get_env("SMTP_HOST", required=require_email, default="smtp.gmail.com") or "smtp.gmail.com",
+        smtp_host=_get_env("SMTP_HOST", required=False, default="smtp.gmail.com") or "smtp.gmail.com",
         smtp_port=_get_int_env("SMTP_PORT", 587),
         smtp_username=_get_env("SMTP_USERNAME", required=require_email, default="") or "",
         smtp_password=_get_env("SMTP_PASSWORD", required=require_email, default="") or "",
