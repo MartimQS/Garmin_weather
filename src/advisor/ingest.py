@@ -90,7 +90,7 @@ def ingest_weather_forecast(conn: sqlite3.Connection, config: AppConfig) -> bool
             row["fetched_at"] = _now_iso()
             upsert(conn, "weather_hourly_forecast", ["target_datetime"], row)
 
-        aq = client.fetch_daily_air_quality(days=8)
+        aq = client.fetch_daily_air_quality(days=7)
         for a in aq:
             row = asdict(a)
             row["fetched_at"] = _now_iso()
