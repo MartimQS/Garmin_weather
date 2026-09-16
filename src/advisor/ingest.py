@@ -77,6 +77,7 @@ def ingest_weather_forecast(conn: sqlite3.Connection, config: AppConfig) -> bool
     client = WeatherClient(
         config.location.latitude, config.location.longitude, config.location.timezone
     )
+    today = date.today()
     try:
         daily = client.fetch_daily_forecast(days=8)
         for f in daily:
@@ -89,6 +90,12 @@ def ingest_weather_forecast(conn: sqlite3.Connection, config: AppConfig) -> bool
             row = asdict(f)
             row["fetched_at"] = _now_iso()
             upsert(conn, "weather_hourly_forecast", ["target_datetime"], row)
+        # Upserts only add/update rows; without this, hourly forecasts from
+        # past ingestion runs would accumulate indefinitely and a stale but
+        # still-"suitable" past window could outrank today's real forecast.
+        conn.execute(
+            "DELETE FROM weather_hourly_forecast WHERE target_datetime < ?", (today.isoformat(),)
+        )
 
         aq = client.fetch_daily_air_quality(days=7)
         for a in aq:

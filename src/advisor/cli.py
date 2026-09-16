@@ -52,9 +52,18 @@ def _baseline_from_db(conn: sqlite3.Connection, as_of: date) -> Baseline:
     )
 
 
-def _hourly_forecast_from_db(conn: sqlite3.Connection) -> list[HourPoint]:
+def _hourly_forecast_from_db(conn: sqlite3.Connection, not_before: date) -> list[HourPoint]:
+    """Hourly forecast rows from ``not_before`` onward, oldest first.
+
+    ``weather_hourly_forecast`` accumulates rows across ingestion runs (see
+    ``ingest.ingest_weather_forecast``), so without this filter a stale
+    window from a previous day — one that happened to satisfy the outdoor
+    thresholds — would sort ahead of today's real forecast and get
+    recommended as if it were still upcoming.
+    """
     rows = conn.execute(
-        "SELECT * FROM weather_hourly_forecast ORDER BY target_datetime ASC"
+        "SELECT * FROM weather_hourly_forecast WHERE target_datetime >= ? ORDER BY target_datetime ASC",
+        (not_before.isoformat(),),
     ).fetchall()
     return [
         HourPoint(
@@ -140,7 +149,7 @@ def cmd_daily_digest(config: AppConfig, conn: sqlite3.Connection, args: argparse
 
     activity_dates_rows = conn.execute("SELECT DISTINCT date FROM activities").fetchall()
     activity_dates = [datetime.fromisoformat(r["date"]).date() for r in activity_dates_rows]
-    hourly = _hourly_forecast_from_db(conn)
+    hourly = _hourly_forecast_from_db(conn, today)
     nudge = build_activity_nudge(
         activity_dates,
         as_of,
